@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <string>
 #include <ctime>
+#include <chrono>
 #include <fstream>
 #include <filesystem>
 #include "socket.hpp"
@@ -24,33 +25,16 @@ in_addr_t GetAddrFromDomain(const std::string& domain) {
     return addr_list[0]->s_addr;
 }
 
-static void _clock_gettime(struct timespec* clock_time) {
-#if !defined _POSIX_MONOTONIC_CLOCK || _POSIX_MONOTONIC_CLOCK < 0
-    clock_gettime(CLOCK_REALTIME, clock_time);
-#elif _POSIX_MONOTONIC_CLOCK > 0
-    clock_gettime(CLOCK_MONOTONIC, clock_time);
-#else
-    if (clock_gettime(CLOCK_MONOTONIC, clock_time)) {
-        clock_gettime(CLOCK_REALTIME, clock_time);
-    }
-#endif
-}
-
+// Monotonic nanosecond timer, portable across Windows / macOS / Linux.
+// The original implementation used clock_gettime(CLOCK_REALTIME) which is
+// POSIX-only; on Windows clang-cl that fails with "use of undeclared
+// identifier 'CLOCK_REALTIME'". std::chrono::steady_clock gives us the
+// same semantics everywhere in a single line.
 static uint64_t clock_elapsed_ns(void) {
-    static bool sClockInitialized = false;
-    static uint64_t clock_start_ns;
-    if (!sClockInitialized) {
-        struct timespec clock_start = { 0 };
-        _clock_gettime(&clock_start);
-        clock_start_ns = ((uint64_t)clock_start.tv_sec) * 1000000000 + ((uint64_t)clock_start.tv_nsec);
-        sClockInitialized = true;
-    }
-
-    struct timespec clock_current = { 0 };
-    _clock_gettime(&clock_current);
-
-    uint64_t clock_current_ns = ((uint64_t)clock_current.tv_sec) * 1000000000 + ((uint64_t)clock_current.tv_nsec);
-    return (clock_current_ns - clock_start_ns);
+    static const auto start = std::chrono::steady_clock::now();
+    const auto now = std::chrono::steady_clock::now();
+    return static_cast<uint64_t>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(now - start).count());
 }
 
 float clock_elapsed(void) {
