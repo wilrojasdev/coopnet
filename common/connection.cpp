@@ -2,8 +2,10 @@
 #include <string>
 #include <set>
 #include <functional>
+#ifndef _WIN32
 #include <unistd.h>
 #include <fcntl.h>
+#endif
 
 #include "connection.hpp"
 #include "libcoopnet.h"
