@@ -174,15 +174,20 @@ Peer* Client::PeerGet(uint64_t aUserId) {
 }
 
 bool Client::PeerSend(const uint8_t* aData, size_t aDataLength) {
-    bool ret = true;
+    // Succeed if at least one peer accepted the datagram. Requiring every peer
+    // to be ICE-connected made mesh "broadcast" fail whenever any link was
+    // still handshaking — the last joiner often had host+older peers in the map
+    // with mixed readiness, so reliable-ish payloads (e.g. PlayerJoin) were
+    // dropped entirely instead of reaching whoever was ready.
+    bool any_ok = false;
     for (auto& it : mPeers) {
         Peer* peer = it.second;
         if (!peer) { continue; }
-        if (!peer->Send(aData, aDataLength)) {
-            ret = false;
+        if (peer->Send(aData, aDataLength)) {
+            any_ok = true;
         }
     }
-    return ret && (mPeers.size() > 0);
+    return any_ok && (mPeers.size() > 0);
 }
 
 bool Client::PeerSendTo(uint64_t aPeerId, const uint8_t* aData, size_t aDataLength) {
